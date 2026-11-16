@@ -352,16 +352,23 @@ function orientCam(){
   T3.cam.quaternion.slerp(T3.base.clone().multiply(q),.35);
 }
 function xrFrame(frame){
-  if(!T3.hitSrc) return;
-  const hits=frame.getHitTestResults(T3.hitSrc);
-  if(hits.length&&!T3.placed){ const p=hits[0].getPose(T3.r.xr.getReferenceSpace()); T3.reticle.visible=true; T3.reticle.matrix.fromArray(p.transform.matrix); }
-  else T3.reticle.visible=false;
+  const ref=T3.r.xr.getReferenceSpace(), vp=frame.getViewerPose(ref);
+  if(vp&&!T3.autoPlaced){
+    const o=vp.transform.orientation, p=vp.transform.position;
+    const f=new THREE.Vector3(0,0,-1).applyQuaternion(new THREE.Quaternion(o.x,o.y,o.z,o.w)); f.y=0; if(f.lengthSq()<1e-4) f.set(0,0,-1); f.normalize();
+    T3.holder.position.set(p.x+f.x*1.8,p.y-1.4,p.z+f.z*1.8); T3.holder.rotation.set(0,Math.atan2(-f.x,-f.z),0);
+    T3.holder.visible=true; T3.autoPlaced=true; T3.spawn=0; T3.yaw=0;
+  }
+  let found=false;
+  if(T3.hitSrc){ const hits=frame.getHitTestResults(T3.hitSrc); if(hits.length){ const hp=hits[0].getPose(ref); if(hp){ found=true; T3.reticle.matrix.fromArray(hp.transform.matrix); } } }
+  T3.reticle.visible=found;
+  if(found!==T3.lastFound){ T3.lastFound=found; $('hint').textContent=found?UI[L].floorOk:UI[L].floorSearch; }
 }
 function placeAtReticle(){
   const p=new THREE.Vector3().setFromMatrixPosition(T3.reticle.matrix), c=new THREE.Vector3();
   c.setFromMatrixPosition(T3.r.xr.getCamera(T3.cam).matrixWorld);
   T3.holder.position.copy(p); T3.holder.rotation.set(0,Math.atan2(c.x-p.x,c.z-p.z),0);
-  T3.holder.visible=true; T3.placed=true; T3.reticle.visible=false; T3.spawn=0; T3.yaw=0;
+  T3.holder.visible=true; T3.placed=true; T3.spawn=0; T3.yaw=0;
 }
 async function startXR(){
   if(!init3D()) return;
@@ -370,10 +377,10 @@ async function startXR(){
   try{
     const s=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}});
     T3.prevMode=modeKey; T3.r.xr.setReferenceSpaceType('local'); await T3.r.xr.setSession(s);
-    document.body.classList.add('xr'); setMode('xr'); T3.placed=false; T3.holder.visible=false;
+    document.body.classList.add('xr'); setMode('xr'); T3.placed=false; T3.autoPlaced=false; T3.lastFound=null;
     T3.hitSrc=await s.requestHitTestSource({space:await s.requestReferenceSpace('viewer')});
-    s.addEventListener('select',()=>{ if(!T3.placed&&T3.reticle.visible) placeAtReticle(); });
-    s.addEventListener('end',()=>{ document.documentElement.classList.remove('xr'); document.body.classList.remove('xr'); if(T3.prevMode==='live') startCam(); T3.hitSrc=null; T3.reticle.visible=false; T3.holder.visible=true; T3.placed=false; placeDefault(); setMode(T3.prevMode||'scene'); resize3D(); });
+    s.addEventListener('select',()=>{ if(T3.reticle.visible) placeAtReticle(); });
+    s.addEventListener('end',()=>{ $('hint').textContent=UI[L].hint; document.documentElement.classList.remove('xr'); document.body.classList.remove('xr'); if(T3.prevMode==='live') startCam(); T3.hitSrc=null; T3.reticle.visible=false; T3.holder.visible=true; T3.placed=false; placeDefault(); setMode(T3.prevMode||'scene'); resize3D(); });
     toast(UI[L].tapFloor);
   }catch(e){ document.documentElement.classList.remove('xr'); document.body.classList.remove('xr'); toast(UI[L].xrNo+' ('+((e&&e.message)||e)+')'); if(modeKey==='live') startCam(); }
 }
@@ -499,14 +506,14 @@ const S=[
 ];
 
 const UI={
- en:{brand:'Nonsan Confucian AR',next:'Next ›',quiz:'Take the quiz ✦',done:'Seal collected ✓',hint:'The scholar stays put in space · Drag to turn him · Pinch to resize',place:'Place',xrLbl:'Walk AR',xrMode:'WORLD AR',tapFloor:'Point at the floor, then tap to place the scholar. Walk around him!',placed:'The scholar is standing in front of you.',xrNo:'Walk AR needs Android Chrome with ARCore.',bow:'Bow',photo:'Photo',visit:'Visit',lang:'한국어',
+ en:{brand:'Nonsan Confucian AR',next:'Next ›',quiz:'Take the quiz ✦',done:'Seal collected ✓',hint:'The scholar stays put in space · Drag to turn him · Pinch to resize',place:'Place',xrLbl:'Walk AR',xrMode:'WORLD AR',tapFloor:'The scholar appears in front of you. Tap the yellow ring on the floor to move him. Walk around him!',placed:'The scholar is standing in front of you.',xrNo:'Walk AR needs Android Chrome with ARCore.',floorSearch:'Move your phone slowly over the floor…',floorOk:'Floor found — tap to move the scholar onto the yellow ring',bow:'Bow',photo:'Photo',visit:'Visit',lang:'한국어',
    iTitle:'Meet the Scholars of Nonsan',iSub:'Summon Joseon-era Confucian scholars into your space. Listen to their stories, learn their manners, and collect all four seals.',go:'Enter AR ›',
    iNote:"Camera access is requested for live AR. If it isn't available, a Donam Seowon scene or your own photo is used.",
    correct:'Correct! Seal earned:',wrong:'Not quite — try again.',close:'Continue',pTitle:'Seowon Passport',pSub:'Meet each scholar and pass their quiz to earn a seal.',
    cert:'Certificate of Confucian Learning',certSub:'This certifies that the traveler below has met the scholars of Nonsan and learned the way of ye (禮).',name:'Your name',
    bowBack:'They bow back to you. 🙇',vTitle:'Visit Nonsan',live:'LIVE AR',scene:'SCENE',photoMode:'PHOTO AR',
    visits:[["Donam Seowon","Confucian academy honoring Kim Jang-saeng · UNESCO World Heritage (2019)"],["Myeongjae Old House","Yun Jeung's family home in Noseong, with its famous rows of sauce jars"],["Noseong Hyanggyo","Local Confucian school of the Joseon era"]]},
- ko:{brand:'논산 유교 AR',next:'다음 ›',quiz:'퀴즈 풀기 ✦',done:'인장 획득 ✓',hint:'선비는 공간에 고정돼요 · 드래그로 돌리기 · 핀치로 크기',place:'배치',xrLbl:'걷는 AR',xrMode:'월드 AR',tapFloor:'바닥을 비춘 뒤 탭하면 선비가 그 자리에 섭니다. 주위를 걸어 보세요!',placed:'선비를 정면에 다시 세웠어요.',xrNo:'걷는 AR은 안드로이드 크롬(ARCore)에서 지원돼요.',bow:'절',photo:'사진',visit:'방문',lang:'English',
+ ko:{brand:'논산 유교 AR',next:'다음 ›',quiz:'퀴즈 풀기 ✦',done:'인장 획득 ✓',hint:'선비는 공간에 고정돼요 · 드래그로 돌리기 · 핀치로 크기',place:'배치',xrLbl:'걷는 AR',xrMode:'월드 AR',tapFloor:'선비가 앞에 나타나요. 바닥의 노란 원을 탭하면 그 자리로 옮겨요. 주위를 걸어 보세요!',placed:'선비를 정면에 다시 세웠어요.',xrNo:'걷는 AR은 안드로이드 크롬(ARCore)에서 지원돼요.',floorSearch:'폰을 천천히 움직여 바닥을 비춰 주세요…',floorOk:'바닥 인식 완료 — 탭하면 노란 원 위로 선비가 이동해요',bow:'절',photo:'사진',visit:'방문',lang:'English',
    iTitle:'논산의 선비를 만나다',iSub:'조선의 유학자들을 내 공간으로 불러오세요. 이야기를 듣고, 예절을 배우고, 네 개의 인장을 모두 모아 보세요.',go:'AR 시작 ›',
    iNote:'라이브 AR을 위해 카메라 권한을 요청합니다. 사용할 수 없으면 돈암서원 배경이나 직접 찍은 사진을 사용합니다.',
    correct:'정답! 획득한 인장:',wrong:'아쉬워요, 다시 골라 보세요.',close:'계속',pTitle:'서원 여권',pSub:'각 선비를 만나고 퀴즈를 맞히면 인장을 받습니다.',
@@ -696,7 +703,7 @@ function recenter(){G.base=null;G.x=G.y=0;window.applyPos&&applyPos();}
   $('stage').addEventListener('wheel',e=>{e.preventDefault();sc=Math.min(2.6,Math.max(.4,sc*(e.deltaY<0?1.08:.93)));apply();},{passive:false});
 })();
 
-$('placeBtn').onclick=()=>{ if(!T3.r) return; if(T3.r.xr.isPresenting){ T3.placed=false; T3.holder.visible=false; toast(UI[L].tapFloor); } else { placeDefault(); T3.spawn=0; toast(UI[L].placed); } };
+$('placeBtn').onclick=()=>{ if(!T3.r) return; if(T3.r.xr.isPresenting){ T3.autoPlaced=false; toast(UI[L].placed); } else { placeDefault(); T3.spawn=0; toast(UI[L].placed); } };
 $('xrBtn').onclick=startXR;
 ['.top','.bottom','.tools','.ov'].forEach(q=>document.querySelectorAll(q).forEach(el=>el.addEventListener('beforexrselect',e=>e.preventDefault())));
 (async()=>{ try{ if(navigator.xr&&await navigator.xr.isSessionSupported('immersive-ar')) $('xrBtn').style.display='grid'; }catch(e){} })();
