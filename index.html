@@ -25,11 +25,19 @@ button{font-family:inherit;cursor:pointer}
 #stage{position:absolute;inset:0;overflow:hidden;touch-action:none}
 #bg,#video,#photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 #video,#photo{display:none}
-#charWrap{position:absolute;left:50%;top:42%;width:260px;transform:translate(-50%,-50%);z-index:5;cursor:grab;opacity:0}
+#charWrap{position:absolute;inset:0;z-index:5;cursor:grab;opacity:0;transform:none!important}
+#charWrap>svg{width:230px;margin:18vh auto 0}
+body.xr #bg,body.xr #video,body.xr #photo,body.xr #charWrap{display:none!important}
+body.xr,body.xr #app{background:transparent!important}
+#xrBtn{display:none}
+#arrow{position:fixed;top:45%;z-index:8;display:none;align-items:center;gap:6px;background:#b3261ee6;color:#fff;font:800 14px system-ui;padding:10px 14px;border-radius:999px;pointer-events:none;animation:nudge 1s ease-in-out infinite}
+#arrow.l{left:10px}#arrow.r{right:10px}
+@keyframes nudge{50%{transform:translateX(var(--dx,6px))}}
+#arrow.l{--dx:-6px}
 #charWrap.show{animation:summon 1s ease-out forwards}
 #charWrap svg{width:100%;height:auto;display:block;filter:drop-shadow(0 18px 18px #0007);animation:bob 4s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-16px) rotate(1deg)}}
-#charWrap::before{content:"";position:absolute;left:50%;top:48%;width:120%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,#ffe7a855 0%,#ffd77a22 40%,transparent 70%);animation:aura 4s ease-in-out infinite;pointer-events:none}
+#charWrap.flat::before{content:"";position:absolute;left:50%;top:48%;width:120%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,#ffe7a855 0%,#ffd77a22 40%,transparent 70%);animation:aura 4s ease-in-out infinite;pointer-events:none}
 @keyframes aura{50%{opacity:.55;transform:translate(-50%,-50%) scale(1.08)}}
 .mote{position:absolute;width:6px;height:6px;border-radius:50%;background:#ffe39a;box-shadow:0 0 8px #ffd25a;pointer-events:none;animation:mote linear infinite}
 @keyframes mote{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(-160px);opacity:0}}
@@ -155,6 +163,8 @@ body.ko .card p{font-size:15px}
   <div class="tools">
     <button class="tool" id="bowBtn" title="Bow">🙇<small id="bowLbl">Bow</small></button>
     <label class="tool" id="camLbl" title="Photo" style="cursor:pointer">📷<small id="camTxt">Photo</small><input type="file" id="fileIn" accept="image/*" capture="environment" hidden></label>
+    <button class="tool" id="placeBtn" title="Place">📍<small id="placeLbl">Place</small></button>
+    <button class="tool" id="xrBtn" title="Walk AR">🕶️<small id="xrLbl">Walk AR</small></button>
     <button class="tool" id="visitBtn" title="Visit">🗺️<small id="visitLbl">Visit</small></button>
   </div>
 
@@ -213,6 +223,7 @@ body.ko .card p{font-size:15px}
 </div></div>
 
 <div class="toast" id="toast"></div>
+<div id="arrow"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -324,28 +335,69 @@ function buildScholar(o){
   return root;
 }
 function resize3D(){
-  if(!T3.r) return; const w=$('charWrap').clientWidth||260, h=Math.round(w*1.45);
-  T3.r.setSize(w,h); T3.cam.aspect=w/h; T3.cam.updateProjectionMatrix();
+  if(!T3.r||T3.r.xr.isPresenting) return; const w=innerWidth, h=innerHeight;
+  T3.r.setSize(w,h); T3.cam.aspect=w/h; T3.cam.fov=w<h?70:50; T3.cam.updateProjectionMatrix();
+}
+const DEG=Math.PI/180;
+function placeDefault(){
+  T3.holder.position.set(0,-1.35,-3.6); T3.holder.rotation.set(0,0,0); T3.base=null;
+  if(!T3.ori){ T3.cam.position.set(0,0,0); T3.cam.quaternion.set(0,0,0,1); T3.cam.lookAt(0,-.85,-3.6); }
+}
+function orientCam(){
+  const o=T3.ori, scr=((screen.orientation&&screen.orientation.angle)||window.orientation||0)*DEG;
+  const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(o.b*DEG,o.a*DEG,-o.g*DEG,'YXZ'));
+  q.multiply(new THREE.Quaternion(-Math.SQRT1_2,0,0,Math.SQRT1_2));
+  q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),-scr));
+  if(!T3.base){ const f=new THREE.Vector3(0,0,-1).applyQuaternion(q); T3.base=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.atan2(-f.x,-f.z)); T3.cam.quaternion.copy(T3.base).multiply(q); }
+  T3.cam.quaternion.slerp(T3.base.clone().multiply(q),.35);
+}
+function xrFrame(frame){
+  if(!T3.hitSrc) return;
+  const hits=frame.getHitTestResults(T3.hitSrc);
+  if(hits.length&&!T3.placed){ const p=hits[0].getPose(T3.r.xr.getReferenceSpace()); T3.reticle.visible=true; T3.reticle.matrix.fromArray(p.transform.matrix); }
+  else T3.reticle.visible=false;
+}
+function placeAtReticle(){
+  const p=new THREE.Vector3().setFromMatrixPosition(T3.reticle.matrix), c=new THREE.Vector3();
+  c.setFromMatrixPosition(T3.r.xr.getCamera(T3.cam).matrixWorld);
+  T3.holder.position.copy(p); T3.holder.rotation.set(0,Math.atan2(c.x-p.x,c.z-p.z),0);
+  T3.holder.visible=true; T3.placed=true; T3.reticle.visible=false; T3.spawn=0; T3.yaw=0;
+}
+async function startXR(){
+  if(!init3D()) return;
+  try{
+    const s=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}});
+    T3.prevMode=modeKey; T3.r.xr.setReferenceSpaceType('local'); await T3.r.xr.setSession(s);
+    document.body.classList.add('xr'); setMode('xr'); T3.placed=false; T3.holder.visible=false;
+    T3.hitSrc=await s.requestHitTestSource({space:await s.requestReferenceSpace('viewer')});
+    s.addEventListener('select',()=>{ if(!T3.placed&&T3.reticle.visible) placeAtReticle(); });
+    s.addEventListener('end',()=>{ document.body.classList.remove('xr'); T3.hitSrc=null; T3.reticle.visible=false; T3.holder.visible=true; T3.placed=false; placeDefault(); setMode(T3.prevMode||'scene'); resize3D(); });
+    toast(UI[L].tapFloor);
+  }catch(e){ toast(UI[L].xrNo); }
 }
 function init3D(){
   if(!window.THREE) return false; if(T3.r) return true;
   try{
-    const r=new THREE.WebGLRenderer({alpha:true,antialias:true}); r.setPixelRatio(Math.min(2,devicePixelRatio)); r.outputEncoding=THREE.sRGBEncoding;
-    const sc=new THREE.Scene(), cam=new THREE.PerspectiveCamera(30,1,.1,50); cam.position.set(0,1.95,7.4); cam.lookAt(0,1.72,0);
+    const r=new THREE.WebGLRenderer({alpha:true,antialias:true}); r.setPixelRatio(Math.min(2,devicePixelRatio)); r.outputEncoding=THREE.sRGBEncoding; r.xr.enabled=true;
+    const sc=new THREE.Scene(), cam=new THREE.PerspectiveCamera(62,1,.05,100);
+    const holder=new THREE.Group(); sc.add(holder);
+    const reticle=new THREE.Mesh(new THREE.RingGeometry(.12,.16,40).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffd25a})); reticle.matrixAutoUpdate=false; reticle.visible=false; sc.add(reticle);
     sc.add(new THREE.HemisphereLight(0xfff4e0,0x6b5a45,.85));
     const d=new THREE.DirectionalLight(0xffffff,.95); d.position.set(2.5,5,4); sc.add(d);
     const rim=new THREE.DirectionalLight(0xffdfa0,.6); rim.position.set(-3,3,-4); sc.add(rim);
     const cv=document.createElement('canvas'); cv.width=cv.height=128; const g=cv.getContext('2d'), gr=g.createRadialGradient(64,64,0,64,64,64);
     gr.addColorStop(0,'rgba(0,0,0,.5)'); gr.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=gr; g.fillRect(0,0,128,128);
     const sh=new THREE.Mesh(new THREE.PlaneGeometry(2.2,2.2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthWrite:false}));
-    sh.rotation.x=-Math.PI/2; sh.position.y=-.02; sc.add(sh);
-    Object.assign(T3,{r,sc,cam,sh}); resize3D(); addEventListener('resize',resize3D);
+    sh.rotation.x=-Math.PI/2; sh.position.y=.01; holder.add(sh);
+    Object.assign(T3,{r,sc,cam,sh,holder,reticle,userScale:1}); placeDefault(); resize3D(); addEventListener('resize',resize3D);
     const clock=new THREE.Clock();
-    (function loop(){
-      requestAnimationFrame(loop); const t=clock.getElapsedTime(), m=T3.model;
+    r.setAnimationLoop((ts,frame)=>{
+      const t=clock.getElapsedTime(), m=T3.model;
+      if(frame) xrFrame(frame); else if(T3.ori) orientCam();
+      holder.scale.setScalar(.55*T3.userScale);
       if(m){
         T3.spawn=Math.min(1,T3.spawn+.02); const e=1-Math.pow(1-T3.spawn,3);
-        m.scale.setScalar(.001+e); m.rotation.y=T3.yaw+Math.sin(t*.5)*.18+(1-e)*Math.PI*2;
+        m.scale.setScalar(.001+e); m.rotation.y=T3.yaw+Math.sin(t*.5)*.1+(1-e)*Math.PI*2;
         const fl=.14+Math.sin(t*1.5)*.09; m.position.y=fl;
         sh.scale.setScalar(1-fl*.9); sh.material.opacity=.95-fl*2;
         const target=performance.now()<T3.bowUntil?.62:0; T3.bow+=(target-T3.bow)*.07;
@@ -353,8 +405,13 @@ function init3D(){
         const talking=T3.typing||(sound&&window.speechSynthesis&&speechSynthesis.speaking);
         u.mouth.scale.y=talking?1+Math.abs(Math.sin(t*13))*3.2:1;
       }
+      if(!frame&&T3.model){
+        const pc=holder.position.clone().add(new THREE.Vector3(0,.9,0)).applyMatrix4(cam.matrixWorldInverse), v=holder.position.clone().add(new THREE.Vector3(0,.9,0)).project(cam), ar=$('arrow');
+        const off=pc.z>0||Math.abs(v.x)>1.05||Math.abs(v.y)>1.1;
+        if(off){ const left=pc.x<0; ar.className=left?'l':'r'; ar.textContent=left?('← '+S[cur].name[L]):(S[cur].name[L]+' →'); ar.style.display='flex'; } else ar.style.display='none';
+      }
       r.render(sc,cam);
-    })();
+    });
     return true;
   }catch(e){ return false; }
 }
@@ -440,14 +497,14 @@ const S=[
 ];
 
 const UI={
- en:{brand:'Nonsan Confucian AR',next:'Next ›',quiz:'Take the quiz ✦',done:'Seal collected ✓',hint:'Drag to turn the scholar · Pinch to resize · Move your phone to look around',bow:'Bow',photo:'Photo',visit:'Visit',lang:'한국어',
+ en:{brand:'Nonsan Confucian AR',next:'Next ›',quiz:'Take the quiz ✦',done:'Seal collected ✓',hint:'The scholar stays put in space · Drag to turn him · Pinch to resize',place:'Place',xrLbl:'Walk AR',xrMode:'WORLD AR',tapFloor:'Point at the floor, then tap to place the scholar. Walk around him!',placed:'The scholar is standing in front of you.',xrNo:'Walk AR needs Android Chrome with ARCore.',bow:'Bow',photo:'Photo',visit:'Visit',lang:'한국어',
    iTitle:'Meet the Scholars of Nonsan',iSub:'Summon Joseon-era Confucian scholars into your space. Listen to their stories, learn their manners, and collect all four seals.',go:'Enter AR ›',
    iNote:"Camera access is requested for live AR. If it isn't available, a Donam Seowon scene or your own photo is used.",
    correct:'Correct! Seal earned:',wrong:'Not quite — try again.',close:'Continue',pTitle:'Seowon Passport',pSub:'Meet each scholar and pass their quiz to earn a seal.',
    cert:'Certificate of Confucian Learning',certSub:'This certifies that the traveler below has met the scholars of Nonsan and learned the way of ye (禮).',name:'Your name',
    bowBack:'They bow back to you. 🙇',vTitle:'Visit Nonsan',live:'LIVE AR',scene:'SCENE',photoMode:'PHOTO AR',
    visits:[["Donam Seowon","Confucian academy honoring Kim Jang-saeng · UNESCO World Heritage (2019)"],["Myeongjae Old House","Yun Jeung's family home in Noseong, with its famous rows of sauce jars"],["Noseong Hyanggyo","Local Confucian school of the Joseon era"]]},
- ko:{brand:'논산 유교 AR',next:'다음 ›',quiz:'퀴즈 풀기 ✦',done:'인장 획득 ✓',hint:'드래그로 돌려 보기 · 핀치로 크기 조절 · 폰을 움직여 둘러보기',bow:'절',photo:'사진',visit:'방문',lang:'English',
+ ko:{brand:'논산 유교 AR',next:'다음 ›',quiz:'퀴즈 풀기 ✦',done:'인장 획득 ✓',hint:'선비는 공간에 고정돼요 · 드래그로 돌리기 · 핀치로 크기',place:'배치',xrLbl:'걷는 AR',xrMode:'월드 AR',tapFloor:'바닥을 비춘 뒤 탭하면 선비가 그 자리에 섭니다. 주위를 걸어 보세요!',placed:'선비를 정면에 다시 세웠어요.',xrNo:'걷는 AR은 안드로이드 크롬(ARCore)에서 지원돼요.',bow:'절',photo:'사진',visit:'방문',lang:'English',
    iTitle:'논산의 선비를 만나다',iSub:'조선의 유학자들을 내 공간으로 불러오세요. 이야기를 듣고, 예절을 배우고, 네 개의 인장을 모두 모아 보세요.',go:'AR 시작 ›',
    iNote:'라이브 AR을 위해 카메라 권한을 요청합니다. 사용할 수 없으면 돈암서원 배경이나 직접 찍은 사진을 사용합니다.',
    correct:'정답! 획득한 인장:',wrong:'아쉬워요, 다시 골라 보세요.',close:'계속',pTitle:'서원 여권',pSub:'각 선비를 만나고 퀴즈를 맞히면 인장을 받습니다.',
@@ -465,12 +522,12 @@ function setLang(l){
   L=l; document.body.classList.toggle('ko',l==='ko'); document.documentElement.lang=l;
   const u=UI[l];
   $('brandTxt').textContent=u.brand; $('hint').textContent=u.hint; $('bowLbl').textContent=u.bow;
-  $('camTxt').textContent=u.photo; $('visitLbl').textContent=u.visit; $('langBtn').textContent=u.lang;
+  $('camTxt').textContent=u.photo; $('placeLbl').textContent=u.place; $('xrLbl').textContent=u.xrLbl; $('visitLbl').textContent=u.visit; $('langBtn').textContent=u.lang;
   $('iTitle').textContent=u.iTitle; $('iSub').textContent=u.iSub; $('goBtn').textContent=u.go; $('iNote').textContent=u.iNote;
   document.querySelectorAll('#intro .langsel button').forEach(b=>b.classList.toggle('on',b.dataset.l===l));
   setMode(modeKey); renderRoster(); renderDialog(false);
 }
-function setMode(k){modeKey=k; $('mode').textContent=UI[L][k==='live'?'live':k==='photo'?'photoMode':'scene'];}
+function setMode(k){modeKey=k; $('mode').textContent=UI[L][{live:'live',photo:'photoMode',xr:'xrMode'}[k]||'scene'];}
 
 function renderRoster(){
   $('roster').innerHTML=S.map((s,i)=>`<button class="chip ${i===cur?'active':''}" data-i="${i}"><span class="s ${got.has(s.id)?'got':''}">${s.seal}</span>${s.name[L]}</button>`).join('');
@@ -479,11 +536,11 @@ function renderRoster(){
 }
 
 function summon(i){
-  cur=i; line=0; recenter();
+  cur=i; line=0;
   const w=$('charWrap'); w.classList.remove('show');
-  if(init3D()){ w.innerHTML=''; w.appendChild(T3.r.domElement); if(T3.model) T3.sc.remove(T3.model); T3.model=buildScholar(S[i].look); T3.sc.add(T3.model); T3.spawn=0; T3.yaw=0; resize3D(); }
+  if(init3D()){ w.innerHTML=''; w.appendChild(T3.r.domElement); if(T3.model) T3.holder.remove(T3.model); T3.model=buildScholar(S[i].look); T3.holder.add(T3.model); T3.spawn=0; T3.yaw=0; resize3D(); }
   else w.innerHTML=scholar(S[i].look);
-  for(let k=0;k<9;k++){const m=document.createElement('i');m.className='mote';m.style.left=(15+Math.random()*70)+'%';m.style.top=(30+Math.random()*60)+'%';m.style.animationDuration=(3+Math.random()*3)+'s';m.style.animationDelay=(-Math.random()*5)+'s';w.appendChild(m);}
+  if(!T3.model)for(let k=0;k<9;k++){const m=document.createElement('i');m.className='mote';m.style.left=(15+Math.random()*70)+'%';m.style.top=(30+Math.random()*60)+'%';m.style.animationDuration=(3+Math.random()*3)+'s';m.style.animationDelay=(-Math.random()*5)+'s';w.appendChild(m);}
   void w.offsetWidth; w.classList.add('show');
   const r=document.createElement('div'); r.className='ring';
   const rect=w.getBoundingClientRect(); r.style.left=(rect.left+rect.width/2)+'px'; r.style.top=(rect.top+rect.height/2)+'px'; r.style.position='fixed';
@@ -604,6 +661,7 @@ $('fileIn').onchange=e=>{
 const G={x:0,y:0,base:null,on:false};
 function onOri(e){
   if(e.alpha==null) return;
+  T3.ori={a:e.alpha,b:e.beta,g:e.gamma}; if(T3.r&&!T3.r.xr.isPresenting) return;
   if(!G.base) G.base={a:e.alpha,b:e.beta};
   let da=e.alpha-G.base.a; if(da>180)da-=360; if(da<-180)da+=360;
   const db=e.beta-G.base.b, k=innerWidth/60; // ~60° field of view
@@ -612,15 +670,15 @@ function onOri(e){
   window.applyPos&&applyPos();
 }
 async function startGyro(){
-  try{ if(typeof DeviceOrientationEvent!=='undefined'&&DeviceOrientationEvent.requestPermission){ if(await DeviceOrientationEvent.requestPermission()!=='granted')return; }
-       addEventListener('deviceorientation',onOri);}catch(e){}
+  try{ if(typeof DeviceOrientationEvent!=='undefined'&&DeviceOrientationEvent.requestPermission) await DeviceOrientationEvent.requestPermission(); }catch(e){}
+  addEventListener('deviceorientation',onOri);
 }
 function recenter(){G.base=null;G.x=G.y=0;window.applyPos&&applyPos();}
 
 /* ---------- Drag / pinch / wheel ---------- */
 (function(){
   const w=$('charWrap'); const pts=new Map(); let x=0,y=0,sc=1,start=null;
-  const apply=()=>w.style.transform=`translate(calc(-50% + ${x+G.x}px), calc(-50% + ${y+G.y}px)) scale(${sc})`;
+  const apply=()=>(T3.userScale=sc, w.style.transform=`translate(calc(-50% + ${x+G.x}px), calc(-50% + ${y+G.y}px)) scale(${sc})`);
   window.applyPos=apply;
   w.addEventListener('pointerdown',e=>{w.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);start={x,y,sc,yaw:T3.yaw,pts:new Map(pts)};});
   w.addEventListener('pointermove',e=>{
@@ -634,6 +692,11 @@ function recenter(){G.base=null;G.x=G.y=0;window.applyPos&&applyPos();}
   w.addEventListener('pointerup',up); w.addEventListener('pointercancel',up);
   $('stage').addEventListener('wheel',e=>{e.preventDefault();sc=Math.min(2.6,Math.max(.4,sc*(e.deltaY<0?1.08:.93)));apply();},{passive:false});
 })();
+
+$('placeBtn').onclick=()=>{ if(!T3.r) return; if(T3.r.xr.isPresenting){ T3.placed=false; T3.holder.visible=false; toast(UI[L].tapFloor); } else { placeDefault(); T3.spawn=0; toast(UI[L].placed); } };
+$('xrBtn').onclick=startXR;
+['.top','.bottom','.tools','.ov'].forEach(q=>document.querySelectorAll(q).forEach(el=>el.addEventListener('beforexrselect',e=>e.preventDefault())));
+(async()=>{ try{ if(navigator.xr&&await navigator.xr.isSessionSupported('immersive-ar')) $('xrBtn').style.display='grid'; }catch(e){} })();
 
 /* ---------- Top controls ---------- */
 $('langBtn').onclick=()=>{setLang(L==='en'?'ko':'en'); speak(S[cur].lines[L][line]);};
