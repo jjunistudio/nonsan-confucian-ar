@@ -28,7 +28,7 @@ button{font-family:inherit;cursor:pointer}
 #charWrap{position:absolute;inset:0;z-index:5;cursor:grab;opacity:0;transform:none!important}
 #charWrap>svg{width:230px;margin:18vh auto 0}
 body.xr #bg,body.xr #video,body.xr #photo,body.xr #charWrap{display:none!important}
-body.xr,body.xr #app{background:transparent!important}
+html.xr,body.xr,body.xr #app{background:transparent!important}
 #xrBtn{display:none}
 #arrow{position:fixed;top:45%;z-index:8;display:none;align-items:center;gap:6px;background:#b3261ee6;color:#fff;font:800 14px system-ui;padding:10px 14px;border-radius:999px;pointer-events:none;animation:nudge 1s ease-in-out infinite}
 #arrow.l{left:10px}#arrow.r{right:10px}
@@ -365,15 +365,17 @@ function placeAtReticle(){
 }
 async function startXR(){
   if(!init3D()) return;
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; $('video').srcObject=null; }
+  document.documentElement.classList.add('xr');
   try{
     const s=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}});
     T3.prevMode=modeKey; T3.r.xr.setReferenceSpaceType('local'); await T3.r.xr.setSession(s);
     document.body.classList.add('xr'); setMode('xr'); T3.placed=false; T3.holder.visible=false;
     T3.hitSrc=await s.requestHitTestSource({space:await s.requestReferenceSpace('viewer')});
     s.addEventListener('select',()=>{ if(!T3.placed&&T3.reticle.visible) placeAtReticle(); });
-    s.addEventListener('end',()=>{ document.body.classList.remove('xr'); T3.hitSrc=null; T3.reticle.visible=false; T3.holder.visible=true; T3.placed=false; placeDefault(); setMode(T3.prevMode||'scene'); resize3D(); });
+    s.addEventListener('end',()=>{ document.documentElement.classList.remove('xr'); document.body.classList.remove('xr'); if(T3.prevMode==='live') startCam(); T3.hitSrc=null; T3.reticle.visible=false; T3.holder.visible=true; T3.placed=false; placeDefault(); setMode(T3.prevMode||'scene'); resize3D(); });
     toast(UI[L].tapFloor);
-  }catch(e){ toast(UI[L].xrNo); }
+  }catch(e){ document.documentElement.classList.remove('xr'); document.body.classList.remove('xr'); toast(UI[L].xrNo+' ('+((e&&e.message)||e)+')'); if(modeKey==='live') startCam(); }
 }
 function init3D(){
   if(!window.THREE) return false; if(T3.r) return true;
@@ -391,7 +393,7 @@ function init3D(){
     sh.rotation.x=-Math.PI/2; sh.position.y=.01; holder.add(sh);
     Object.assign(T3,{r,sc,cam,sh,holder,reticle,userScale:1}); placeDefault(); resize3D(); addEventListener('resize',resize3D);
     const clock=new THREE.Clock();
-    r.setAnimationLoop((ts,frame)=>{
+    r.setAnimationLoop((ts,frame)=>{ try{
       const t=clock.getElapsedTime(), m=T3.model;
       if(frame) xrFrame(frame); else if(T3.ori) orientCam();
       holder.scale.setScalar(.55*T3.userScale);
@@ -411,7 +413,7 @@ function init3D(){
         if(off){ const left=pc.x<0; ar.className=left?'l':'r'; ar.textContent=left?('← '+S[cur].name[L]):(S[cur].name[L]+' →'); ar.style.display='flex'; } else ar.style.display='none';
       }
       r.render(sc,cam);
-    });
+    }catch(err){ console.error(err); try{ r.render(sc,cam); }catch(e2){} } });
     return true;
   }catch(e){ return false; }
 }
@@ -646,10 +648,11 @@ $('bowBtn').onclick=()=>{
 };
 
 /* ---------- Camera / photo ---------- */
+let camStream=null;
 async function startCam(){
   try{
     const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
-    const v=$('video'); v.srcObject=st; v.style.display='block'; $('bg').style.display='none'; setMode('live'); document.body.classList.add('live');
+    camStream=st; const v=$('video'); v.srcObject=st; v.style.display='block'; $('bg').style.display='none'; setMode('live'); document.body.classList.add('live');
   }catch(e){ setMode('scene'); }
 }
 $('fileIn').onchange=e=>{
