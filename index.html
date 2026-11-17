@@ -105,6 +105,7 @@ body.ko .card p{font-size:15px}
 .cert{text-align:center;border:3px double #8b6b3d;background:#f7f0e1}
 .cert .seals{display:flex;justify-content:center;gap:10px;margin:16px 0}
 .cert .seals span{width:58px;height:58px;border-radius:8px;background:var(--red);color:#fff;font-family:'Nanum Myeongjo';font-weight:800;display:grid;place-items:center;font-size:17px;transform:rotate(-6deg)}
+.cert #certImg{width:100%;border-radius:6px;box-shadow:0 6px 24px #0004;margin-top:6px}
 .cert input{margin-top:10px;font:inherit;font-size:22px;text-align:center;border:none;border-bottom:2px solid #8b6b3d;background:transparent;width:80%;padding:4px}
 .visit{margin-top:14px;text-align:left}
 .visit div{padding:10px 0;border-top:1px solid #0001}
@@ -212,7 +213,10 @@ body.ko .card p{font-size:15px}
   <h2 id="pTitle">Seowon Passport</h2>
   <p id="pSub"></p>
   <div class="seals" id="pSeals"></div>
-  <div id="pName" style="display:none"><input id="nameIn" placeholder="Your name"><p id="pDate" style="font-size:14px;opacity:.7"></p></div>
+  <div id="pName" style="display:none"><input id="nameIn" placeholder="Your name" maxlength="24"><p id="pDate" style="font-size:14px;opacity:.7"></p>
+    <button class="btn red" id="issueBtn" style="margin-top:14px">Issue certificate</button></div>
+  <div id="certOut" style="display:none"><img id="certImg" alt="Certificate"><p id="certTip" style="font-size:13px;opacity:.7"></p>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap"><button class="btn red" id="saveBtn">Save</button><button class="btn ghost" id="editBtn">Edit name</button></div></div>
 </div></div>
 
 <!-- visit -->
@@ -518,14 +522,14 @@ const UI={
    iTitle:'Meet the Scholars of Nonsan',iSub:'Summon Joseon-era Confucian scholars into your space. Listen to their stories, learn their manners, and collect all four seals.',go:'Enter AR ›',
    iNote:"Camera access is requested for live AR. If it isn't available, a Donam Seowon scene or your own photo is used.",
    correct:'Correct! Seal earned:',wrong:'Not quite — try again.',close:'Continue',pTitle:'Seowon Passport',pSub:'Meet each scholar and pass their quiz to earn a seal.',
-   cert:'Certificate of Confucian Learning',certSub:'This certifies that the traveler below has met the scholars of Nonsan and learned the way of ye (禮).',name:'Your name',
+   cert:'Certificate of Confucian Culture',issue:'Issue certificate',save:'Save image',edit:'Edit name',certTip:'Tip: you can also press and hold the image to save it.',needName:'Please enter your name.',certSub:'This certifies that the traveler below has met the scholars of Nonsan and learned the way of ye (禮).',name:'Your name',
    bowBack:'They bow back to you. 🙇',vTitle:'Visit Nonsan',live:'LIVE AR',scene:'SCENE',photoMode:'PHOTO AR',
    visits:[["Donam Seowon","Confucian academy honoring Kim Jang-saeng · UNESCO World Heritage (2019)"],["Myeongjae Old House","Yun Jeung's family home in Noseong, with its famous rows of sauce jars"],["Noseong Hyanggyo","Local Confucian school of the Joseon era"]]},
  ko:{brand:'논산 유교 AR',next:'다음 ›',quiz:'퀴즈 풀기 ✦',done:'인장 획득 ✓',hint:'선비는 공간에 고정돼요 · 드래그로 돌리기 · 핀치로 크기',place:'배치',xrLbl:'걷는 AR',xrMode:'월드 AR',tapFloor:'폰으로 바닥을 비추면 노란 원 위에 선비가 나타나요. 다른 곳을 탭하면 옮겨지고, 주위를 걸어 볼 수 있어요!',placed:'선비를 정면에 다시 세웠어요.',xrNo:'걷는 AR은 안드로이드 크롬(ARCore)에서 지원돼요.',floorSearch:'폰을 천천히 움직여 바닥을 비춰 주세요…',floorOk:'바닥 인식 완료 — 탭하면 노란 원 위로 선비가 이동해요',bow:'절',photo:'사진',visit:'방문',lang:'English',
    iTitle:'논산의 선비를 만나다',iSub:'조선의 유학자들을 내 공간으로 불러오세요. 이야기를 듣고, 예절을 배우고, 네 개의 인장을 모두 모아 보세요.',go:'AR 시작 ›',
    iNote:'라이브 AR을 위해 카메라 권한을 요청합니다. 사용할 수 없으면 돈암서원 배경이나 직접 찍은 사진을 사용합니다.',
    correct:'정답! 획득한 인장:',wrong:'아쉬워요, 다시 골라 보세요.',close:'계속',pTitle:'서원 여권',pSub:'각 선비를 만나고 퀴즈를 맞히면 인장을 받습니다.',
-   cert:'유학 수료증',certSub:'아래의 길손은 논산의 선비들을 만나 예(禮)의 길을 배웠음을 증명합니다.',name:'이름을 쓰세요',
+   cert:'유교 문화 수료증',issue:'수료증 발급',save:'이미지 저장',edit:'이름 수정',certTip:'이미지를 길게 눌러도 저장할 수 있어요.',needName:'이름을 입력해 주세요.',certSub:'아래의 길손은 논산의 선비들을 만나 예(禮)의 길을 배웠음을 증명합니다.',name:'이름을 쓰세요',
    bowBack:'선비가 답례합니다. 🙇',vTitle:'논산에 가 보기',live:'라이브 AR',scene:'배경 모드',photoMode:'사진 AR',
    visits:[["돈암서원","김장생을 모신 서원 · 유네스코 세계유산(2019)"],["명재고택","노성면의 윤증 고택, 줄지어 선 장독대로 유명"],["노성향교","조선 시대 지역 유학 교육기관"]]}
 };
@@ -642,11 +646,76 @@ function openPass(){
   const u=UI[L], all=got.size===S.length;
   $('pTitle').textContent=all?u.cert:u.pTitle; $('pSub').textContent=all?u.certSub:u.pSub;
   $('pSeals').innerHTML=S.map(s=>`<span style="${got.has(s.id)?'':'background:#0001;color:#0003;transform:none'}">${s.seal}</span>`).join('');
-  $('pName').style.display=all?'block':'none'; $('nameIn').placeholder=u.name;
+  $('pName').style.display=all?'block':'none'; $('nameIn').placeholder=u.name; $('certOut').style.display='none'; $('pSeals').style.display='flex';
+  $('issueBtn').textContent=u.issue; $('saveBtn').textContent=u.save; $('editBtn').textContent=u.edit; $('certTip').textContent=u.certTip;
   $('pDate').textContent=(L==='ko'?'논산 · ':'Nonsan · ')+new Date().toLocaleDateString(L==='ko'?'ko-KR':'en-US',{year:'numeric',month:'long',day:'numeric'});
   $('pass').classList.add('open');
 }
 $('passBtn').onclick=openPass;
+
+/* ---------- Certificate image ---------- */
+function wrapText(g,text,x,y,maxW,lh){
+  const words=text.split(' '); let line='', yy=y;
+  for(const w of words){ const test=line+(line?' ':'')+w; if(g.measureText(test).width>maxW&&line){ g.fillText(line,x,yy); line=w; yy+=lh; } else line=test; }
+  if(line) g.fillText(line,x,yy); return yy;
+}
+function fitFont(g,txt,weight,size,family,maxW){ let s=size; do{ g.font=weight+' '+s+'px '+family; s-=2; }while(g.measureText(txt).width>maxW&&s>14); }
+function seal(g,cx,cy,size,txt,rot){
+  g.save(); g.translate(cx,cy); g.rotate(rot||0);
+  g.fillStyle='#b3261e'; g.beginPath(); g.roundRect?g.roundRect(-size/2,-size/2,size,size,size*.12):g.rect(-size/2,-size/2,size,size); g.fill();
+  g.strokeStyle='#f4ecdc'; g.lineWidth=size*.04; g.strokeRect(-size/2+size*.08,-size/2+size*.08,size*.84,size*.84);
+  g.fillStyle='#f8efe0'; g.textAlign='center'; g.textBaseline='middle';
+  const ch=[...txt];
+  if(ch.length===4){ g.font='800 '+(size*.32)+'px "Nanum Myeongjo", serif'; g.fillText(ch[2],-size*.2,-size*.18); g.fillText(ch[0],size*.2,-size*.18); g.fillText(ch[3],-size*.2,size*.2); g.fillText(ch[1],size*.2,size*.2); }
+  else if(ch.length===1){ g.font='800 '+(size*.56)+'px "Nanum Myeongjo", serif'; g.fillText(ch[0],0,size*.03); }
+  else { g.font='800 '+(size*.36)+'px "Nanum Myeongjo", serif'; g.fillText(ch[0],0,-size*.19); g.fillText(ch[1]||'',0,size*.21); }
+  g.restore();
+}
+async function drawCert(name){
+  try{ await Promise.all([document.fonts.load('800 40px "Nanum Myeongjo"'),document.fonts.load('700 40px "Cormorant Garamond"')]); }catch(e){}
+  const W=1080,H=1500,c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+  const ko=L==='ko', serif=ko?'"Nanum Myeongjo", serif':'"Cormorant Garamond","Nanum Myeongjo", serif';
+  g.fillStyle='#f4ecdc'; g.fillRect(0,0,W,H);
+  for(let i=0;i<9000;i++){ g.fillStyle='rgba(120,90,50,'+(Math.random()*.06)+')'; g.fillRect(Math.random()*W,Math.random()*H,1.5,1.5); }
+  g.strokeStyle='#8b6b3d'; g.lineWidth=10; g.strokeRect(40,40,W-80,H-80);
+  g.strokeStyle='#b3261e'; g.lineWidth=3; g.strokeRect(62,62,W-124,H-124);
+  g.strokeStyle='#8b6b3d'; g.lineWidth=2; g.strokeRect(74,74,W-148,H-148);
+  for(const [x,y] of [[74,74],[W-74,74],[74,H-74],[W-74,H-74]]){ g.save(); g.translate(x,y); g.fillStyle='#b3261e'; g.beginPath(); g.moveTo(0,-22); g.lineTo(22,0); g.lineTo(0,22); g.lineTo(-22,0); g.closePath(); g.fill(); g.restore(); }
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  seal(g,W/2,215,120,'禮',0);
+  g.fillStyle='#1b1a17'; const ttl=ko?'유교 문화 수료증':'Certificate of Confucian Culture'; fitFont(g,ttl,'800',ko?78:72,serif,W-240); g.fillText(ttl,W/2,375);
+  g.fillStyle='#6b5636'; g.font='700 30px '+serif; g.fillText(ko?'Certificate of Confucian Culture':'유교 문화 수료증',W/2,425);
+  g.strokeStyle='#8b6b3d'; g.lineWidth=2; g.beginPath(); g.moveTo(W/2-200,465); g.lineTo(W/2+200,465); g.stroke();
+  g.fillStyle='#6b5636'; g.font='700 32px '+serif; g.fillText(ko?'성명':'This certifies that',W/2,540);
+  g.fillStyle='#1b1a17'; fitFont(g,name,'800',92,'"Nanum Myeongjo", serif',W-300); g.fillText(name,W/2,655);
+  g.strokeStyle='#b3261e'; g.lineWidth=2; g.beginPath(); g.moveTo(W/2-300,685); g.lineTo(W/2+300,685); g.stroke();
+  g.fillStyle='#2b2620'; g.font='500 '+(ko?34:38)+'px '+serif;
+  const body=ko?'위 사람은 논산의 선비 김장생, 김집, 율곡 이이, 윤증을 만나 공경의 예(禮), 홀로 있을 때 삼가는 신독(愼獨), 뜻을 세우는 입지(立志), 올곧고 검소한 삶을 배웠기에 이 수료증을 드립니다.'
+    :'has met the scholars of Nonsan — Kim Jang-saeng, Kim Jip, Yulgok Yi I and Yun Jeung — and learned the way of ye (禮): respect shown through manners, sindok (愼獨) or integrity when alone, ipji (立志) or setting one’s aim, and a life of honesty and simplicity.';
+  const endY=wrapText(g,body,W/2,770,W-260,ko?60:56);
+  const sy=Math.max(endY+150,1060);
+  S.forEach((s,k)=>{ const x=W/2+(k-1.5)*200; seal(g,x,sy,110,s.seal,(k%2?.06:-.06)); g.fillStyle='#3d3326'; g.font='700 26px '+serif; g.fillText(s.name[L],x,sy+100); });
+  const d=new Date().toLocaleDateString(ko?'ko-KR':'en-US',{year:'numeric',month:'long',day:'numeric'});
+  const fx=W/2-80; g.fillStyle='#3d3326'; g.font='700 32px '+serif; g.fillText(d,fx,sy+190);
+  const ft=ko?'충청남도 논산 · 논산 유교 AR 체험':'Nonsan, Chungcheongnam-do · Nonsan Confucian AR'; fitFont(g,ft,'700',30,serif,620); g.fillText(ft,fx,sy+240);
+  seal(g,W-185,sy+215,120,'論山儒學',-.08);
+  return c;
+}
+let certCanvas=null;
+$('issueBtn').onclick=async()=>{
+  const n=$('nameIn').value.trim(); if(!n){ toast(UI[L].needName); $('nameIn').focus(); return; }
+  certCanvas=await drawCert(n); $('certImg').src=certCanvas.toDataURL('image/png');
+  $('pName').style.display='none'; $('pSeals').style.display='none'; $('pSub').textContent=''; $('certOut').style.display='block';
+  stampFx('禮');
+};
+$('editBtn').onclick=()=>{ $('certOut').style.display='none'; $('pName').style.display='block'; $('pSeals').style.display='flex'; $('pSub').textContent=UI[L].certSub; };
+$('saveBtn').onclick=()=>{
+  if(!certCanvas) return; const fn='nonsan-confucian-certificate.png';
+  certCanvas.toBlob(async b=>{
+    try{ const f=new File([b],fn,{type:'image/png'}); if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:UI[L].cert}); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fn; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1500);
+  },'image/png');
+};
 
 /* ---------- Visit ---------- */
 $('visitBtn').onclick=()=>{
