@@ -348,16 +348,20 @@ function resize3D(){
   T3.r.setSize(w,h); T3.cam.aspect=w/h; T3.cam.fov=w<h?70:50; T3.cam.updateProjectionMatrix();
 }
 const DEG=Math.PI/180;
+const HEAD_Y=1.5, PLACE_D=3.4;
 function placeDefault(){
-  T3.holder.position.set(0,-1.35,-3.6); T3.holder.rotation.set(0,0,0); T3.base=null;
-  if(!T3.ori){ T3.cam.position.set(0,0,0); T3.cam.quaternion.set(0,0,0,1); T3.cam.lookAt(0,-.85,-3.6); }
+  T3.holder.position.set(0,-HEAD_Y,-PLACE_D); T3.holder.rotation.set(0,0,0); T3.base=null; T3.settleUntil=0;
+  if(!T3.ori){ T3.cam.position.set(0,0,0); T3.cam.quaternion.set(0,0,0,1); T3.cam.lookAt(0,0,-PLACE_D); }
 }
 function orientCam(){
   const o=T3.ori, scr=((screen.orientation&&screen.orientation.angle)||window.orientation||0)*DEG;
   const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(o.b*DEG,o.a*DEG,-o.g*DEG,'YXZ'));
   q.multiply(new THREE.Quaternion(-Math.SQRT1_2,0,0,Math.SQRT1_2));
   q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),-scr));
-  if(!T3.base){ const f=new THREE.Vector3(0,0,-1).applyQuaternion(q); T3.base=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.atan2(-f.x,-f.z)); T3.cam.quaternion.copy(T3.base).multiply(q); }
+  if(!T3.base&&!T3.settleUntil) T3.settleUntil=performance.now()+1000;
+  if(!T3.base||performance.now()<T3.settleUntil){ const f=new THREE.Vector3(0,0,-1).applyQuaternion(q); T3.base=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-Math.atan2(-f.x,-f.z)); T3.cam.quaternion.copy(T3.base).multiply(q);
+    const fa=new THREE.Vector3(0,0,-1).applyQuaternion(T3.cam.quaternion), py=Math.max(-.6,Math.min(.35,fa.y)), ph=Math.sqrt(1-py*py), hl=Math.hypot(fa.x,fa.z)||1;
+    T3.holder.position.set(fa.x/hl*ph*PLACE_D, py*PLACE_D-HEAD_Y, fa.z/hl*ph*PLACE_D); T3.holder.rotation.set(0,Math.atan2(-T3.holder.position.x,-T3.holder.position.z),0); }
   T3.cam.quaternion.slerp(T3.base.clone().multiply(q),.35);
 }
 function xrFrame(frame){
